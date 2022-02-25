@@ -7,38 +7,33 @@
 %undefine _disable_source_fetch
 ##trace
 
-# force single job compilation
-%define _smp_mflags -j1
 
 %global debug_package    %{nil}
 
 %global _lto_cflags      %{nil}
 
 %global with_32bit       1
-%global wineversion      7.0
 
-#%%global bitseryversion   5.2.2
-#%%global tomlversion      2.5.0
-#%%global function2version 4.2.0
-%global vst3sdkversion   v3.7.4_build_25-patched
+%global bitseryversion   5.2.2
+%global tomlversion      3.0.1
+%global function2version 4.2.0
+%global vst3sdkversion   3.7.4_build_25-patched
 
-%global gitdate          20220101
-%global commit           e0ab24e64581dcd3c6367054ab670a8b7201b5d9
+%global gitdate          20220217
+%global commit           136ae5ba98401b17cd3cdcfe2caf31bd85d02777
 %global shortcommit      %(c=%{commit}; echo ${c:0:7})
 
-%global version          3.8.0
-
 # set this to "1" if building a git/beta/rc release
-%global beta_or_rc       0
+%global beta_or_rc       1
 
 
 #=============================================================================
 # general
 #-----------------------------------------------------------------------------
 Name:           yabridge
-Version:        %{version}
+Version:        3.8.0
 %if %{beta_or_rc}
-Release:        0.%{release}.%{gitdate}.git%{shortcommit}%{?dist}
+Release:        1.%{gitdate}.git%{shortcommit}%{?dist}
 %else
 Release:        1%{?dist}
 %endif
@@ -46,18 +41,16 @@ Summary:        Yet Another VST bridge, run Windows VST2 plugins under Linux
 License:        GPLv3
 URL:            https://github.com/robbert-vdh/yabridge
 %if %{beta_or_rc}
-Source0:        https://github.com/robbert-vdh/yabridge/archive/{commit}/%{name}-%{version}-git%{shortcommit}.tar.gz
+Source0:        https://github.com/robbert-vdh/yabridge/archive/%{commit}/%{name}-%{version}-git%{shortcommit}.tar.gz
 #Source0:        https://github.com/robbert-vdh/yabridge/archive/yabridge-master.zip
 %else
-Source0:        https://github.com/robbert-vdh/yabridge/archive/%{version}/%{name}-%{version}.tar.gz
+Source0:        https://github.com/robbert-vdh/yabridge/archive/refs/tags/%{version}.tar.gz
 %endif
-#Source1:        bitsery-%%{bitseryversion}.tar.gz
-#Source2:        tomlplusplus-%%{tomlversion}.tar.gz
-#Source3:        function2-%%{function2version}.tar.gz
+
 # https://github.com/robbert-vdh/vst3sdk
 # git clone && git submodule update --init
 # ~/bin/git-archive-all.sh --format=tar.gz --prefix=vst3/ -o ../vst3sdk-v3.7.3_build_20-patched.tar.gz v3.7.3_build_20-patched
-Source4:        https://github.com/robbert-vdh/vst3sdk/archive/refs/tags/%{vst3sdkversion}.tar.gz
+Source4:        https://github.com/robbert-vdh/vst3sdk/archive/refs/tags/v%{vst3sdkversion}.tar.gz
 BuildRequires:  cmake
 BuildRequires:  cargo
 BuildRequires:  meson >= 0.55
@@ -73,10 +66,7 @@ BuildRequires:  libstdc++-devel
 BuildRequires:  libxcb-devel
 BuildRequires:  rust
 BuildRequires:  rust-packaging
-BuildRequires:  wine-devel = %{wineversion}
-BuildRequires:  bitsery
-BuildRequires:  tomlplusplus
-BuildRequires:  function2
+BuildRequires:  wine-devel
 %if %{with_32bit}
 BuildRequires:  boost(x86-32)
 BuildRequires:  boost-devel(x86-32)
@@ -86,9 +76,9 @@ BuildRequires:  boost-system(x86-32)
 BuildRequires:  glibc-devel(x86-32)
 BuildRequires:  libstdc++-devel(x86-32)
 BuildRequires:  libxcb-devel(x86-32)
-BuildRequires:  wine(x86-32) = %{wineversion}
-BuildRequires:  wine-core(x86-32) = %{wineversion}
-BuildRequires:  wine-devel(x86-32) = %{wineversion}
+BuildRequires:  wine(x86-32)
+BuildRequires:  wine-core(x86-32)
+BuildRequires:  wine-devel(x86-32)
 %endif
 BuildArch:      x86_64
 Requires:       boost
@@ -116,17 +106,17 @@ while also staying easy to debug and maintain.
 # prep
 #-----------------------------------------------------------------------------
 %prep
-%if %{beta_or_rc}
-%autosetup -p1 -n %{name}
-%else
-%setup -qn %{name}-%{version}
-%endif
 
-# yabridgectl
-cd tools/yabridgectl
-%cargo_generate_buildrequires tools/yabridgectl
-%generate_buildrequires
-cd ../..
+
+%if %{beta_or_rc}
+%autosetup -p1 -n %{name}-%{commit}/tools/yabridgectl
+%cargo_prep
+%autosetup -p1 -n %{name}-%{commit}
+%else
+%autosetup -p1 -n %{name}-%{version}/tools/yabridgectl
+%cargo_prep
+%autosetup -p1 -n %{name}-%{version}
+%endif
 
 # copy required subprojects into subprojects/packagecache/
 mkdir -p subprojects/packagecache
@@ -170,15 +160,11 @@ sed -i -e"4s|^  version : '.*$|  version : '%{version}',|" meson.build
 %build
 
 %if %{with_32bit}
-#meson setup --buildtype=release --cross-file cross-wine.conf \
-#  -Dwith-bitbridge=true --unity=on --unity-size=1000 \
-#  build
-%meson -Dwith-bitbridge=true --unity=on --unity-size=1000 --cross-file cross-wine.conf --buildtype=release
+%meson --cross-file cross-wine.conf \
+  -Dwith-bitbridge=true --wrap-mode=default --unity=on --unity-size=1000
 %else
-#meson setup --buildtype=release --cross-file cross-wine.conf \
-#  -Dwith-bitbridge=false --unity=on --unity-size=1000 \
-#  build
-%meson --buildtype=release --cross-file cross-wine.conf -Dwith-bitbridge=false --unity=on --unity-size=1000
+%meson --cross-file cross-wine.conf \
+  -Dwith-bitbridge=false --wrap-mode=default --unity=on --unity-size=1000
 %endif
 
 %meson_build
@@ -205,14 +191,12 @@ install -d -m0755 %{buildroot}%{_bindir}
 install -d -m0755 %{buildroot}%{_libdir}
 
 # install apps and libs
-install -D -m 0755 build/yabridge-group*.exe* %{buildroot}%{_bindir}/
-install -D -m 0755 build/yabridge-host*.exe* %{buildroot}%{_bindir}/
-install -D -m 0755 build/libyabridge-vst*.so %{buildroot}%{_libdir}/
+install -D -m 0755 %{_vpath_builddir}/yabridge-group*.exe* %{buildroot}%{_bindir}/
+install -D -m 0755 %{_vpath_builddir}/yabridge-host*.exe* %{buildroot}%{_bindir}/
+install -D -m 0755 %{_vpath_builddir}/libyabridge-vst*.so %{buildroot}%{_libdir}/
 
 # install tool
-pushd tools/yabridgectl
-%cargo_install
-#install -D -m 0755 tools/yabridgectl/target/release/yabridgectl %{buildroot}%{_bindir}/
+install -D -m 0755 tools/yabridgectl/target/release/yabridgectl %{buildroot}%{_bindir}/
 
 
 #=============================================================================
@@ -255,6 +239,11 @@ pushd tools/yabridgectl
 # changelog
 #-----------------------------------------------------------------------------
 %changelog
+* Fri Feb 25 2022 Cappy Ishihara <cappy@cappuchino.xyz> - 3.8.0-1.%{gitdate}.git%{shortcommit}.um35
+- Repackaged, updated to 3.8.0 with ref 136ae5ba98401b17cd3cdcfe2caf31bd85d02777
+- Removed Wine version requirement
+- use proper RPM macros to build package
+
 * Sat Jan 01 2022 Patrick Laimbock <patrick@laimbock.com> - 3.7.1-0.3
 - update to git rev e0ab24e64581dcd3c6367054ab670a8b7201b5d9
 - require meson >= 0.55
