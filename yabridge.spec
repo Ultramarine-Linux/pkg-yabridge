@@ -46,11 +46,21 @@ Source0:        https://github.com/robbert-vdh/yabridge/archive/%{commit}/%{name
 %else
 Source0:        https://github.com/robbert-vdh/yabridge/archive/refs/tags/%{version}.tar.gz
 %endif
+Source1:        https://github.com/fraillt/bitsery/archive/refs/tags/v%{bitseryversion}.tar.gz
+Source2:        https://github.com/marzer/tomlplusplus/archive/refs/tags/v%{tomlversion}.tar.gz
+Source3:        https://github.com/Naios/function2/archive/refs/tags/%{function2version}.tar.gz
+
 
 # https://github.com/robbert-vdh/vst3sdk
 # git clone && git submodule update --init
 # ~/bin/git-archive-all.sh --format=tar.gz --prefix=vst3/ -o ../vst3sdk-v3.7.3_build_20-patched.tar.gz v3.7.3_build_20-patched
 Source4:        https://github.com/robbert-vdh/vst3sdk/archive/refs/tags/v%{vst3sdkversion}.tar.gz
+
+# Recursive VST3 SDK submodules
+Source5:        https://github.com/steinbergmedia/vst3_base/archive/f69df71891fbc76f872d43d0f3a357c6fb04ae2a.tar.gz
+Source6:        https://github.com/steinbergmedia/vst3_pluginterfaces/archive/2ad397ade5b51007860bedb3b01b8afd2c5f6fba.tar.gz
+Source7:        https://github.com/steinbergmedia/vst3_public_sdk/archive/bc459feee68803346737901471441fd4829ec3f9.tar.gz
+
 BuildRequires:  cmake
 BuildRequires:  cargo
 BuildRequires:  meson >= 0.55
@@ -122,27 +132,42 @@ while also staying easy to debug and maintain.
 mkdir -p subprojects/packagecache
 
 # bitsery
-#cp -v %{SOURCE1} subprojects/packagecache/bitsery-v%{bitseryversion}.tar.gz
+cp -v %{SOURCE1} subprojects/packagecache/bitsery-v%{bitseryversion}.tar.gz
 
 # tomlplusplus
-#cp -v %{SOURCE2} subprojects/packagecache/tomlplusplus-v%{tomlversion}.tar.gz
+cp -v %{SOURCE2} subprojects/packagecache/tomlplusplus-v%{tomlversion}.tar.gz
 
 # function2
-#cp -v %{SOURCE3} subprojects/packagecache
+cp -v %{SOURCE3} subprojects/packagecache/function2-%{function2version}.tar.gz
 
 # unpack stuff and patch
 pushd subprojects/
 
+tar -xzf %{SOURCE1}
+mv -v bitsery-%{bitseryversion} bitsery
+# Bitsery is a CMake project, so meson won't find the meson.build file
+# so we need to manually copy it
+cp packagefiles/bitsery/meson.build bitsery/
+
 # toml
-#unzip %{SOURCE2}
-#mv -v tomlplusplus-%{tomlversion} tomlplusplus
+tar -xzf %{SOURCE2}
+mv -v tomlplusplus-%{tomlversion} tomlplusplus
 
 # function2
-#tar -xzf %{SOURCE3}
-#tar -xJf function2-patch-4.1.0.tar.xz
+tar -xzf %{SOURCE3}
+mv -v function2-%{function2version} function2
+cp packagefiles/function2/meson.build function2/
 
 # vst3sdk
 tar -xzf %{SOURCE4}
+mv -v vst3sdk-%{vst3sdkversion} vst3
+popd
+# Dependencies for vst3sdk are not included in the vst3sdk tarball
+pushd subprojects/vst3
+tar -xzf %{SOURCE5} -C base --strip-components=1
+tar -xzf %{SOURCE6} -C pluginterfaces --strip-components=1
+tar -xzf %{SOURCE7} -C public.sdk --strip-components=1
+
 popd
 
 # set possible newer version in meson.build (dev builds) only on line 4
